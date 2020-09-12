@@ -1,0 +1,517 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "SA-Lab03: Create Lab VPC,Shared VPC and VPC peering",
+    "Metadata": {
+
+    },
+    "Parameters": {
+      "InstanceType" : {
+        "Description" : "WebServer EC2 instance type",
+        "Type" : "String",
+        "Default" : "t2.micro",
+        "AllowedValues" : [ "t1.micro", "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "m1.small", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "g2.2xlarge", "g2.8xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge", "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"]
+  ,
+        "ConstraintDescription" : "must be a valid EC2 instance type."
+      },
+
+    "KeyName" : {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+      "Type" : "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+
+    "DBName": {
+      "Default": "inventory",
+      "Description" : "RDS MySQL database name",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "MasterUser": {
+      "NoEcho": "true",
+      "Description" : "Username for RDS MySQL database access",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "MasterPassword": {
+      "NoEcho": "true",
+      "Description" : "Password for RDS MySQL database access",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "41",
+      "AllowedPattern" : "[a-zA-Z0-9]*",
+      "ConstraintDescription" : "must contain only alphanumeric characters."
+    },
+
+    "LabVpcCIDR": {
+      "Description": "CIDR for this VPC",
+      "Type": "String",
+      "Default": "10.0.0.0/16"
+    },
+
+    "LabPublicSubnet1CIDR": {
+      "Description": "CIDR for public subnet in first AZ",
+      "Type": "String",
+      "Default": "10.0.10.0/24"
+    },
+
+    "LabPrivateSubnet1CIDR": {
+      "Description": "CIDR for private subnet in first AZ",
+      "Type": "String",
+      "Default": "10.0.2.0/23"
+    },
+
+    "SharedVpcCIDR": {
+      "Description": "CIDR for this VPC",
+      "Type": "String",
+      "Default": "10.5.0.0/16"
+    },
+
+    "SharedPrivateSubnet1CIDR": {
+      "Description": "CIDR for public subnet in first AZ",
+      "Type": "String",
+      "Default": "10.5.0.0/23"
+    },
+
+    "SharedPrivateSubnet2CIDR": {
+      "Description": "CIDR for private subnet in second AZ",
+      "Type": "String",
+      "Default": "10.5.2.0/23"
+    },
+  },
+
+    "Mappings": {
+      "AWSInstanceType2Arch" : {
+        "t1.micro"    : { "Arch" : "HVM64"  },
+        "t2.nano"     : { "Arch" : "HVM64"  },
+        "t2.micro"    : { "Arch" : "HVM64"  },
+        "t2.small"    : { "Arch" : "HVM64"  },
+        "t2.medium"   : { "Arch" : "HVM64"  },
+        "t2.large"    : { "Arch" : "HVM64"  },
+        "m1.small"    : { "Arch" : "HVM64"  },
+        "m1.medium"   : { "Arch" : "HVM64"  },
+        "m1.large"    : { "Arch" : "HVM64"  },
+        "m1.xlarge"   : { "Arch" : "HVM64"  },
+        "m2.xlarge"   : { "Arch" : "HVM64"  },
+        "m2.2xlarge"  : { "Arch" : "HVM64"  },
+        "m2.4xlarge"  : { "Arch" : "HVM64"  },
+        "m3.medium"   : { "Arch" : "HVM64"  },
+        "m3.large"    : { "Arch" : "HVM64"  },
+        "m3.xlarge"   : { "Arch" : "HVM64"  },
+        "m3.2xlarge"  : { "Arch" : "HVM64"  },
+        "m4.large"    : { "Arch" : "HVM64"  },
+        "m4.xlarge"   : { "Arch" : "HVM64"  },
+        "m4.2xlarge"  : { "Arch" : "HVM64"  },
+        "m4.4xlarge"  : { "Arch" : "HVM64"  },
+        "m4.10xlarge" : { "Arch" : "HVM64"  },
+        "c1.medium"   : { "Arch" : "HVM64"  },
+        "c1.xlarge"   : { "Arch" : "HVM64"  },
+        "c3.large"    : { "Arch" : "HVM64"  },
+        "c3.xlarge"   : { "Arch" : "HVM64"  },
+        "c3.2xlarge"  : { "Arch" : "HVM64"  },
+        "c3.4xlarge"  : { "Arch" : "HVM64"  },
+        "c3.8xlarge"  : { "Arch" : "HVM64"  },
+        "c4.large"    : { "Arch" : "HVM64"  },
+        "c4.xlarge"   : { "Arch" : "HVM64"  },
+        "c4.2xlarge"  : { "Arch" : "HVM64"  },
+        "c4.4xlarge"  : { "Arch" : "HVM64"  },
+        "c4.8xlarge"  : { "Arch" : "HVM64"  },
+        "g2.2xlarge"  : { "Arch" : "HVMG2"  },
+        "g2.8xlarge"  : { "Arch" : "HVMG2"  },
+        "r3.large"    : { "Arch" : "HVM64"  },
+        "r3.xlarge"   : { "Arch" : "HVM64"  },
+        "r3.2xlarge"  : { "Arch" : "HVM64"  },
+        "r3.4xlarge"  : { "Arch" : "HVM64"  },
+        "r3.8xlarge"  : { "Arch" : "HVM64"  },
+        "i2.xlarge"   : { "Arch" : "HVM64"  },
+        "i2.2xlarge"  : { "Arch" : "HVM64"  },
+        "i2.4xlarge"  : { "Arch" : "HVM64"  },
+        "i2.8xlarge"  : { "Arch" : "HVM64"  },
+        "d2.xlarge"   : { "Arch" : "HVM64"  },
+        "d2.2xlarge"  : { "Arch" : "HVM64"  },
+        "d2.4xlarge"  : { "Arch" : "HVM64"  },
+        "d2.8xlarge"  : { "Arch" : "HVM64"  },
+        "hi1.4xlarge" : { "Arch" : "HVM64"  },
+        "hs1.8xlarge" : { "Arch" : "HVM64"  },
+        "cr1.8xlarge" : { "Arch" : "HVM64"  },
+        "cc2.8xlarge" : { "Arch" : "HVM64"  }
+      },
+
+      "AWSInstanceType2NATArch" : {
+        "t1.micro"    : { "Arch" : "NATHVM64"  },
+        "t2.nano"     : { "Arch" : "NATHVM64"  },
+        "t2.micro"    : { "Arch" : "NATHVM64"  },
+        "t2.small"    : { "Arch" : "NATHVM64"  },
+        "t2.medium"   : { "Arch" : "NATHVM64"  },
+        "t2.large"    : { "Arch" : "NATHVM64"  },
+        "m1.small"    : { "Arch" : "NATHVM64"  },
+        "m1.medium"   : { "Arch" : "NATHVM64"  },
+        "m1.large"    : { "Arch" : "NATHVM64"  },
+        "m1.xlarge"   : { "Arch" : "NATHVM64"  },
+        "m2.xlarge"   : { "Arch" : "NATHVM64"  },
+        "m2.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "m2.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "m3.medium"   : { "Arch" : "NATHVM64"  },
+        "m3.large"    : { "Arch" : "NATHVM64"  },
+        "m3.xlarge"   : { "Arch" : "NATHVM64"  },
+        "m3.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "m4.large"    : { "Arch" : "NATHVM64"  },
+        "m4.xlarge"   : { "Arch" : "NATHVM64"  },
+        "m4.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "m4.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "m4.10xlarge" : { "Arch" : "NATHVM64"  },
+        "c1.medium"   : { "Arch" : "NATHVM64"  },
+        "c1.xlarge"   : { "Arch" : "NATHVM64"  },
+        "c3.large"    : { "Arch" : "NATHVM64"  },
+        "c3.xlarge"   : { "Arch" : "NATHVM64"  },
+        "c3.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "c3.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "c3.8xlarge"  : { "Arch" : "NATHVM64"  },
+        "c4.large"    : { "Arch" : "NATHVM64"  },
+        "c4.xlarge"   : { "Arch" : "NATHVM64"  },
+        "c4.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "c4.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "c4.8xlarge"  : { "Arch" : "NATHVM64"  },
+        "g2.2xlarge"  : { "Arch" : "NATHVMG2"  },
+        "g2.8xlarge"  : { "Arch" : "NATHVMG2"  },
+        "r3.large"    : { "Arch" : "NATHVM64"  },
+        "r3.xlarge"   : { "Arch" : "NATHVM64"  },
+        "r3.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "r3.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "r3.8xlarge"  : { "Arch" : "NATHVM64"  },
+        "i2.xlarge"   : { "Arch" : "NATHVM64"  },
+        "i2.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "i2.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "i2.8xlarge"  : { "Arch" : "NATHVM64"  },
+        "d2.xlarge"   : { "Arch" : "NATHVM64"  },
+        "d2.2xlarge"  : { "Arch" : "NATHVM64"  },
+        "d2.4xlarge"  : { "Arch" : "NATHVM64"  },
+        "d2.8xlarge"  : { "Arch" : "NATHVM64"  },
+        "hi1.4xlarge" : { "Arch" : "NATHVM64"  },
+        "hs1.8xlarge" : { "Arch" : "NATHVM64"  },
+        "cr1.8xlarge" : { "Arch" : "NATHVM64"  },
+        "cc2.8xlarge" : { "Arch" : "NATHVM64"  }
+      },
+      "AWSRegionArch2AMI" : {
+        "us-east-1"        : {"HVM64" : "ami-0080e4c5bc078760e", "HVMG2" : "ami-0aeb704d503081ea6"},
+        "us-west-2"        : {"HVM64" : "ami-01e24be29428c15b2", "HVMG2" : "ami-0fe84a5b4563d8f27"},
+        "us-west-1"        : {"HVM64" : "ami-0ec6517f6edbf8044", "HVMG2" : "ami-0a7fc72dc0e51aa77"},
+        "eu-west-1"        : {"HVM64" : "ami-08935252a36e25f85", "HVMG2" : "ami-0d5299b1c6112c3c7"},
+        "eu-west-2"        : {"HVM64" : "ami-01419b804382064e4", "HVMG2" : "NOT_SUPPORTED"},
+        "eu-west-3"        : {"HVM64" : "ami-0dd7e7ed60da8fb83", "HVMG2" : "NOT_SUPPORTED"},
+        "eu-central-1"     : {"HVM64" : "ami-0cfbf4f6db41068ac", "HVMG2" : "ami-0aa1822e3eb913a11"},
+        "eu-north-1"       : {"HVM64" : "ami-86fe70f8", "HVMG2" : "ami-32d55b4c"},
+        "ap-northeast-1"   : {"HVM64" : "ami-00a5245b4816c38e6", "HVMG2" : "ami-09d0e0e099ecabba2"},
+        "ap-northeast-2"   : {"HVM64" : "ami-00dc207f8ba6dc919", "HVMG2" : "NOT_SUPPORTED"},
+        "ap-northeast-3"   : {"HVM64" : "ami-0b65f69a5c11f3522", "HVMG2" : "NOT_SUPPORTED"},
+        "ap-southeast-1"   : {"HVM64" : "ami-05b3bcf7f311194b3", "HVMG2" : "ami-0e46ce0d6a87dc979"},
+        "ap-southeast-2"   : {"HVM64" : "ami-02fd0b06f06d93dfc", "HVMG2" : "ami-0c0ab057a101d8ff2"},
+        "ap-south-1"       : {"HVM64" : "ami-0ad42f4f66f6c1cc9", "HVMG2" : "ami-0244c1d42815af84a"},
+        "us-east-2"        : {"HVM64" : "ami-0cd3dfa4e37921605", "HVMG2" : "NOT_SUPPORTED"},
+        "ca-central-1"     : {"HVM64" : "ami-07423fb63ea0a0930", "HVMG2" : "NOT_SUPPORTED"},
+        "sa-east-1"        : {"HVM64" : "ami-05145e0b28ad8e0b2", "HVMG2" : "NOT_SUPPORTED"},
+        "cn-north-1"       : {"HVM64" : "ami-053617c9d818c1189", "HVMG2" : "NOT_SUPPORTED"},
+        "cn-northwest-1"   : {"HVM64" : "ami-0f7937761741dc640", "HVMG2" : "NOT_SUPPORTED"}
+      }
+
+    },
+    "Conditions": {
+
+    },
+    "Resources": {
+      "LabVPC": {
+        "Type": "AWS::EC2::VPC",
+        "Properties": {
+          "CidrBlock": { "Ref": "LabVpcCIDR" },
+          "EnableDnsSupport": true,
+          "EnableDnsHostnames": true,
+          "Tags": [{ "Key": "Name", "Value":  "LabVPC" }]
+        }
+      },
+      "InternetGateway": {
+        "Type": "AWS::EC2::InternetGateway",
+        "Properties": {
+          "Tags": [{ "Key": "Name", "Value":  "InternetGateway" }]
+        }
+      },
+      "VPCGatewayAttachment": {
+        "Type": "AWS::EC2::VPCGatewayAttachment",
+        "Properties": {
+          "VpcId": { "Ref": "LabVPC" },
+          "InternetGatewayId": { "Ref": "InternetGateway" }
+        }
+      },
+
+      "PublicRouteTable": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+          "VpcId": { "Ref": "LabVPC" },
+          "Tags": [{ "Key": "Name", "Value":  "PublicRouteTable" }]
+        }
+      },
+      "DefaultPublicRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : "VPCGatewayAttachment",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PublicRouteTable" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : { "Ref" : "InternetGateway" }
+       }
+      },
+
+      "PeeringRouteLabtoShared" : {
+          "Type" : "AWS::EC2::Route",
+          "Properties" : {
+             "DestinationCidrBlock": "10.5.0.0/16",
+             "RouteTableId" : { "Ref" : "PublicRouteTable" },
+             "VpcPeeringConnectionId" : { "Ref" : "myVPCPeeringConnection" }
+           }
+      },
+
+      "PublicSubnet1RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet1" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+       }
+      },
+
+
+
+      "SharedVPC": {
+        "Type": "AWS::EC2::VPC",
+        "Properties": {
+          "CidrBlock": { "Ref": "SharedVpcCIDR" },
+          "EnableDnsSupport": false,
+          "EnableDnsHostnames": false,
+          "Tags": [{ "Key": "Name", "Value":  "SharedVPC" }]
+        }
+      },
+
+      "SharedPrivateRouteTable": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+          "VpcId": { "Ref": "SharedVPC" },
+          "Tags": [{ "Key": "Name", "Value":  "SharedPrivateRouteTable" }]
+        }
+      },
+
+      "PeeringRouteSharedtoLab" : {
+          "Type" : "AWS::EC2::Route",
+          "Properties" : {
+             "DestinationCidrBlock": "10.0.0.0/16",
+             "RouteTableId" : { "Ref" : "SharedPrivateRouteTable" },
+             "VpcPeeringConnectionId" : { "Ref" : "myVPCPeeringConnection" }
+           }
+      },
+
+      "SharedPrivateSubnet1RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SharedPrivateSubnet1" },
+        "RouteTableId" : { "Ref" : "SharedPrivateRouteTable" }
+       }
+      },
+      "SharedPrivateSubnet2RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "SharedPrivateSubnet2" },
+        "RouteTableId" : { "Ref" : "SharedPrivateRouteTable" }
+       }
+      },
+
+      "myVPCPeeringConnection": {
+         "Type": "AWS::EC2::VPCPeeringConnection",
+         "Properties": {
+             "VpcId": {"Ref": "LabVPC"},
+             "PeerVpcId": {"Ref": "SharedVPC"}
+         }
+     },
+
+
+
+      "PublicSubnet1": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1a",
+          "VpcId": { "Ref": "LabVPC" },
+          "CidrBlock": { "Ref": "LabPublicSubnet1CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "PublicSubnet1" }]
+        }
+      },
+      "PrivateSubnet1": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1a",
+          "VpcId": { "Ref": "LabVPC" },
+          "CidrBlock": { "Ref": "LabPrivateSubnet1CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "PrivateSubnet1" }]
+        }
+      },
+
+
+      "SharedPrivateSubnet1": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1a",
+          "VpcId": { "Ref": "SharedVPC" },
+          "CidrBlock": { "Ref": "SharedPrivateSubnet1CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "SharedPrivateSubnet1" }]
+        }
+      },
+      "SharedPrivateSubnet2": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1b",
+          "VpcId": { "Ref": "SharedVPC" },
+          "CidrBlock": { "Ref": "SharedPrivateSubnet2CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "SharedPrivateSubnet2" }]
+        }
+      },
+
+
+        "AppServerSecurityGroup" : {
+          "Type" : "AWS::EC2::SecurityGroup",
+          "Properties" : {
+            "GroupDescription" : "Enable HTTP ingress and SSH",
+            "SecurityGroupIngress" : [{
+              "IpProtocol" : "tcp",
+              "FromPort" : 80,
+              "ToPort" : 80,
+              "CidrIp" : "0.0.0.0/0"
+            },
+            {
+              "IpProtocol" : "tcp",
+              "FromPort" : 22,
+              "ToPort" : 22,
+              "CidrIp" : "0.0.0.0/0"
+            }
+             ],
+            "VpcId" : { "Ref": "LabVPC" },
+            "Tags" :  [ { "Key": "Name", "Value":  "AppServerSecurityGroup" } ]
+          }
+        },
+        "AppServerInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "KeyName": { "Ref": "KeyName" },
+                "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                                  { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+                "InstanceType": { "Ref": "InstanceType" },
+                "NetworkInterfaces": [{
+                  "GroupSet": [{"Ref": "AppServerSecurityGroup"}],
+                  "AssociatePublicIpAddress": "true",
+                  "DeviceIndex": "0",
+                  "DeleteOnTermination": "true",
+                  "SubnetId": { "Ref": "PublicSubnet1" }
+                  }],
+                "Monitoring": "false",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "AppServerInstance"
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "#!/bin/bash -ex",
+                                "yum -y update",
+                                "yum -y install httpd php mysql php-mysql",
+                                "chkconfig httpd on",
+                                "/etc/init.d/httpd start",
+                                "cd /var/www/html",
+                                "wget https://us-west-2-aws-training.s3.amazonaws.com/awsu-ilt/AWS-100-ESS/v4.2/lab-2-configure-website-datastore/scripts/lab2-app.tar.gz",
+                                "tar xvfz lab2-app.tar.gz",
+                                "chown apache:root -R /var/www/html/"
+                            ]
+                        ]
+                    }
+                }
+        }
+      },
+
+
+
+          "rdsDBSubnetGroup": {
+             "Type": "AWS::RDS::DBSubnetGroup",
+             "Properties": {
+                "DBSubnetGroupDescription": "Subnet for RDS",
+                "SubnetIds": [
+                  {
+                    "Ref": "SharedPrivateSubnet1"
+                  },
+                  {
+                    "Ref": "SharedPrivateSubnet2"
+                   }
+                 ],
+                "Tags": [
+                  {
+                    "Key": "Name",
+                    "Value":  "rdsDBSubnetGroup"
+                  }
+                 ]
+             }
+          },
+          "rdsDBInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+              "AllocatedStorage": "20",
+              "DBInstanceClass": "db.t2.micro",
+              "AllowMajorVersionUpgrade": "false",
+              "AutoMinorVersionUpgrade": "false",
+              "BackupRetentionPeriod": "7",
+              "DBInstanceIdentifier": "Lab5DB",
+              "DBName": { "Ref": "DBName" },
+              "VPCSecurityGroups":[
+                { "Ref": "rdsSecurityGroup" }
+              ],
+              "DBSubnetGroupName": { "Ref": "rdsDBSubnetGroup" },
+              "Engine": "MySQL",
+              "EngineVersion": "5.7.30",
+              "MasterUsername": { "Ref": "MasterUser" },
+              "MasterUserPassword": { "Ref": "MasterPassword" },
+              "MultiAZ": "true",
+              "Port": "3306",
+              "PubliclyAccessible": "false",
+              "StorageType": "gp2",
+              "Tags": [{ "Key": "Name", "Value":  "Lab5DB" }  ]
+            }
+          },
+          "rdsSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+              "GroupDescription" : "Allow RDS Connections",
+              "SecurityGroupIngress" : [{
+                "IpProtocol" : "tcp",
+                "FromPort" : 3306,
+                "ToPort" : 3306,
+                "CidrIp" : "0.0.0.0/0"
+             }],
+              "VpcId" : { "Ref": "SharedVPC" },
+              "Tags" :  [ { "Key": "Name", "Value":  "rdsSecurityGroup" } ]
+            }
+          }
+      },
+
+    "Outputs": {
+      "URL" : {
+        "Description" : "URL of the sample website",
+        "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "AppServerInstance", "PublicIp" ]}]]}
+      },
+      "RDSEndpoint": {
+        "Description": "Endpoint of RDS for webserver to connect",
+        "Value": { "Fn::GetAtt" : [ "rdsDBInstance", "Endpoint.Address" ]}
+      }
+
+    }
+}

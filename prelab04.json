@@ -1,0 +1,308 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Pre-lab04 VPC: 2 private subnets and 2 public subnets, internet gateway, nat gateway",
+    "Metadata": {
+
+    },
+    "Parameters": {
+      "DBName": {
+        "Default": "inventory",
+        "Description" : "RDS MySQL database name",
+        "Type": "String",
+        "MinLength": "1",
+        "MaxLength": "64",
+        "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+        "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+      },
+
+      "MasterUser": {
+        "NoEcho": "true",
+        "Description" : "Username for RDS MySQL database access",
+        "Type": "String",
+        "MinLength": "1",
+        "MaxLength": "16",
+        "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+        "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+      },
+
+      "MasterPassword": {
+        "NoEcho": "true",
+        "Description" : "Password for RDS MySQL database access",
+        "Type": "String",
+        "MinLength": "1",
+        "MaxLength": "41",
+        "AllowedPattern" : "[a-zA-Z0-9]*",
+        "ConstraintDescription" : "must contain only alphanumeric characters."
+      },
+
+    "VpcCIDR": {
+      "Description": "CIDR for this VPC",
+      "Type": "String",
+      "Default": "10.0.0.0/16"
+    },
+
+    "PublicSubnet1CIDR": {
+      "Description": "CIDR for public subnet in first AZ",
+      "Type": "String",
+      "Default": "10.0.0.0/24"
+    },
+    "PublicSubnet2CIDR": {
+      "Description": "CIDR for public subnet in second AZ",
+      "Type": "String",
+      "Default": "10.0.1.0/24"
+    },
+    "PrivateSubnet1CIDR": {
+      "Description": "CIDR for private subnet in first AZ",
+      "Type": "String",
+      "Default": "10.0.2.0/23"
+    },
+    "PrivateSubnet2CIDR": {
+      "Description": "CIDR for private subnet in second AZ",
+      "Type": "String",
+      "Default": "10.0.4.0/23"
+    }
+    },
+
+    "Mappings": {
+
+
+    },
+    "Conditions": {
+
+    },
+    "Resources": {
+      "VPCLab": {
+        "Type": "AWS::EC2::VPC",
+        "Properties": {
+          "CidrBlock": { "Ref": "VpcCIDR" },
+          "EnableDnsSupport": true,
+          "EnableDnsHostnames": true,
+          "Tags": [{ "Key": "Name", "Value":  "VPCLab" }]
+        }
+      },
+      "InternetGateway": {
+        "Type": "AWS::EC2::InternetGateway",
+        "Properties": {
+          "Tags": [{ "Key": "Name", "Value":  "InternetGateway" }]
+        }
+      },
+      "VPCGatewayAttachment": {
+        "Type": "AWS::EC2::VPCGatewayAttachment",
+        "Properties": {
+          "VpcId": { "Ref": "VPCLab" },
+          "InternetGatewayId": { "Ref": "InternetGateway" }
+        }
+      },
+      "NatGateway1EIP": {
+        "Type": "AWS::EC2::EIP",
+        "DependsOn": "VPCGatewayAttachment",
+        "Properties": {
+          "Domain": "vpc"
+        }
+      },
+      "NatGateway2EIP": {
+        "Type": "AWS::EC2::EIP",
+        "DependsOn": "VPCGatewayAttachment",
+        "Properties": {
+          "Domain": "vpc"
+        }
+      },
+      "NatGateway1": {
+        "Type": "AWS::EC2::NatGateway",
+        "Properties": {
+          "AllocationId": { "Fn::GetAtt" : [ "NatGateway1EIP", "AllocationId" ]},
+          "SubnetId": { "Ref": "PublicSubnet1" }
+
+        }
+      },
+      "NatGateway2": {
+        "Type": "AWS::EC2::NatGateway",
+        "Properties": {
+          "AllocationId": { "Fn::GetAtt" : [ "NatGateway2EIP", "AllocationId" ]},
+          "SubnetId": { "Ref": "PublicSubnet2" }
+
+        }
+      },
+
+      "PublicRouteTable": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+          "VpcId": { "Ref": "VPCLab" },
+          "Tags": [{ "Key": "Name", "Value":  "PublicRouteTable" }]
+        }
+      },
+      "DefaultPublicRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "DependsOn" : "VPCGatewayAttachment",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PublicRouteTable" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : { "Ref" : "InternetGateway" }
+       }
+      },
+      "PublicSubnet1RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet1" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+       }
+      },
+      "PublicSubnet2RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet2" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+       }
+      },
+      "PrivateRouteTable1": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+          "VpcId": { "Ref": "VPCLab" },
+          "Tags": [{ "Key": "Name", "Value":  "PrivateRouteTable1" }]
+        }
+      },
+      "DefaultPrivateRoute1" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PrivateRouteTable1" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "NatGatewayId" : { "Ref" : "NatGateway1" }
+       }
+      },
+      "PrivateSubnet1RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PrivateSubnet1" },
+        "RouteTableId" : { "Ref" : "PrivateRouteTable1" }
+       }
+      },
+      "PrivateRouteTable2": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+          "VpcId": { "Ref": "VPCLab" },
+          "Tags": [{ "Key": "Name", "Value":  "PrivateRouteTable2" }]
+        }
+      },
+      "DefaultPrivateRoute2" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PrivateRouteTable2" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "NatGatewayId" : { "Ref" : "NatGateway2" }
+       }
+      },
+      "PrivateSubnet2RouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PrivateSubnet2" },
+        "RouteTableId" : { "Ref" : "PrivateRouteTable2" }
+       }
+      },
+
+      "PublicSubnet1": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1a",
+          "VpcId": { "Ref": "VPCLab" },
+          "CidrBlock": { "Ref": "PublicSubnet1CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "PublicSubnet1" }]
+        }
+      },
+      "PublicSubnet2": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1b",
+          "VpcId": { "Ref": "VPCLab" },
+          "CidrBlock": { "Ref": "PublicSubnet2CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "PublicSubnet2" }]
+        }
+      },
+      "PrivateSubnet1": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "AvailabilityZone": "ap-southeast-1a",
+          "VpcId": { "Ref": "VPCLab" },
+          "CidrBlock": { "Ref": "PrivateSubnet1CIDR" },
+          "Tags": [{ "Key": "Name", "Value":  "PrivateSubnet1" }]
+        }
+      },
+        "PrivateSubnet2": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+            "AvailabilityZone": "ap-southeast-1b",
+            "VpcId": { "Ref": "VPCLab" },
+            "CidrBlock": { "Ref": "PrivateSubnet2CIDR" },
+            "Tags": [{ "Key": "Name", "Value":  "PrivateSubnet2" }]
+          }
+        },
+        "DBSG" : {
+          "Type": "AWS::EC2::SecurityGroup",
+          "Properties" : {
+            "GroupDescription": "Open database for access",
+            "SecurityGroupIngress" : [{
+            "IpProtocol" : "tcp",
+            "FromPort" : "3306",
+            "ToPort" : "3306",
+            "CidrIp" : "0.0.0.0/0"
+          }],
+            "VpcId" : { "Ref" : "VPCLab" },
+            "Tags" :  [ { "Key": "Name", "Value":  "DBSG" } ]
+          }
+        },
+
+        "rdsDBSubnetGroup": {
+           "Type": "AWS::RDS::DBSubnetGroup",
+           "Properties": {
+              "DBSubnetGroupDescription": "Subnet for RDS",
+              "SubnetIds": [
+                {
+                  "Ref": "PrivateSubnet1"
+                 },
+                {
+                  "Ref": "PrivateSubnet2"
+                }
+               ],
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value":  "rdsDBSubnetGroup"
+                }
+               ]
+           }
+        },
+        "rdsDBInstance": {
+          "Type": "AWS::RDS::DBInstance",
+          "Properties": {
+            "AllocatedStorage": "20",
+            "DBInstanceClass": "db.t2.micro",
+            "AllowMajorVersionUpgrade": "false",
+            "AutoMinorVersionUpgrade": "false",
+            "BackupRetentionPeriod": "7",
+            "DBInstanceIdentifier": "inventory-db",
+            "DBName": { "Ref": "DBName" },
+            "VPCSecurityGroups":[
+              { "Ref": "DBSG" }
+            ],
+            "DBSubnetGroupName": { "Ref": "rdsDBSubnetGroup" },
+            "Engine": "MySQL",
+            "EngineVersion": "5.7.30",
+            "MasterUsername": { "Ref": "MasterUser" },
+            "MasterUserPassword": { "Ref": "MasterPassword" },
+            "MultiAZ": "true",
+            "Port": "3306",
+            "PubliclyAccessible": "false",
+            "StorageType": "gp2",
+            "Tags": [{ "Key": "Name", "Value":  "Lab5DB" }  ]
+          }
+        }
+
+      },
+    "Outputs": {
+      "RDSEndpoint": {
+        "Description": "Endpoint of RDS for webserver to connect",
+        "Value": { "Fn::GetAtt" : [ "rdsDBInstance", "Endpoint.Address" ]}
+      }
+
+
+    }
+}
